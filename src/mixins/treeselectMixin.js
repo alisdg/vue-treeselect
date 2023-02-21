@@ -1762,18 +1762,41 @@ export default {
         ? this.forest.checkedStateMap[node.id] === UNCHECKED
         : !this.isSelected(node)
 
+      const flatModeAffectedNodes = [ node ]
       if (nextState) {
-        this._selectNode(node)
+        if (this.flat) {
+          if (this.autoSelectAncestors) {
+            node.ancestors.forEach(ancestor => {
+              if (!this.isSelected(ancestor) && !ancestor.isDisabled) flatModeAffectedNodes.push(ancestor)
+            })
+          } else if (this.autoSelectDescendants) {
+            this.traverseDescendantsBFS(node, descendant => {
+              if (!this.isSelected(descendant) && !descendant.isDisabled) flatModeAffectedNodes.push(descendant)
+            })
+          }
+        }
+        this._selectNode(node, flatModeAffectedNodes)
       } else {
-        this._deselectNode(node)
+        if (this.flat) {
+          if (this.autoDeselectAncestors) {
+            node.ancestors.forEach(ancestor => {
+              if (this.isSelected(ancestor) && !ancestor.isDisabled) flatModeAffectedNodes.push(ancestor)
+            })
+          } else if (this.autoDeselectDescendants) {
+            this.traverseDescendantsBFS(node, descendant => {
+              if (this.isSelected(descendant) && !descendant.isDisabled) flatModeAffectedNodes.push(descendant)
+            })
+          }
+        }
+        this._deselectNode(node, flatModeAffectedNodes)
       }
 
       this.buildForestState()
 
       if (nextState) {
-        this.$emit('select', node.raw, this.getInstanceId())
+        this.$emit('select', node.raw, this.getInstanceId(), flatModeAffectedNodes.map(affectedNode => affectedNode.raw))
       } else {
-        this.$emit('deselect', node.raw, this.getInstanceId())
+        this.$emit('deselect', node.raw, this.getInstanceId(), flatModeAffectedNodes.map(affectedNode => affectedNode.raw))
       }
 
       if (this.localSearch.active && nextState && (this.single || this.clearOnSelect)) {
@@ -1805,24 +1828,15 @@ export default {
     },
 
     // This is meant to be called only by `select()`.
-    _selectNode(node) {
+    _selectNode(node, flatModeShouldAdded) {
       if (this.single || this.disableBranchNodes) {
         return this.addValue(node)
       }
 
       if (this.flat) {
-        this.addValue(node)
-
-        if (this.autoSelectAncestors) {
-          node.ancestors.forEach(ancestor => {
-            if (!this.isSelected(ancestor) && !ancestor.isDisabled) this.addValue(ancestor)
-          })
-        } else if (this.autoSelectDescendants) {
-          this.traverseDescendantsBFS(node, descendant => {
-            if (!this.isSelected(descendant) && !descendant.isDisabled) this.addValue(descendant)
-          })
-        }
-
+        flatModeShouldAdded.forEach(affectedNode => {
+          this.addValue(affectedNode)
+        })
         return
       }
 
@@ -1853,24 +1867,15 @@ export default {
     },
 
     // This is meant to be called only by `select()`.
-    _deselectNode(node) {
+    _deselectNode(node, flatModeShouldRemoved) {
       if (this.disableBranchNodes) {
         return this.removeValue(node)
       }
 
       if (this.flat) {
-        this.removeValue(node)
-
-        if (this.autoDeselectAncestors) {
-          node.ancestors.forEach(ancestor => {
-            if (this.isSelected(ancestor) && !ancestor.isDisabled) this.removeValue(ancestor)
-          })
-        } else if (this.autoDeselectDescendants) {
-          this.traverseDescendantsBFS(node, descendant => {
-            if (this.isSelected(descendant) && !descendant.isDisabled) this.removeValue(descendant)
-          })
-        }
-
+        flatModeShouldRemoved.forEach(affectedNode => {
+          this.removeValue(affectedNode)
+        })
         return
       }
 
